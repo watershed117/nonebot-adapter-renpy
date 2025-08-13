@@ -1,4 +1,6 @@
-from typing import TYPE_CHECKING, Any, Union
+import base64
+import pathlib
+from typing import Any, Union
 from typing_extensions import override
 
 from nonebot.message import handle_event
@@ -7,17 +9,11 @@ from nonebot.adapters import Bot as BaseBot
 from .event import Event
 from .message import Message, MessageSegment
 
-import json
-
-if TYPE_CHECKING:
-    from .adapter import Adapter
+from nonebot.adapters import Adapter
+from nonebot import logger
 
 
 class Bot(BaseBot):
-    """
-    your_adapter_name 协议 Bot 适配。
-    """
-
     @override
     def __init__(self, adapter: Adapter, self_id: str, **kwargs: Any):
         super().__init__(adapter, self_id)
@@ -36,13 +32,46 @@ class Bot(BaseBot):
     async def send(
         self,
         event: Event,
-        message: Union[str, Message, MessageSegment],
+        message: Union[str, Message, MessageSegment],  # 接受多种类型
         **kwargs: Any,
     ) -> Any:
-        # 根据平台实现 Bot 回复事件的方法
+        """
+        发送消息到 Ren'Py 客户端。
+        构造一个 JSON 对象，将其序列化为字符串，然后发送。
+        """
+        if isinstance(message, Message):
+            parts = []
+            for segment in message:
+                if segment.is_text():
+                    parts.append({"text": segment.data.get("text", "")})
+                else:
+                    parts.append({"type": segment.type, "data": segment.data})
 
-        # 将消息处理为平台所需的格式后，调用发送消息接口进行发送，例如：
-        data = json.dumps(message)
-        await self.send_message(
-            data=data,
-        )
+        elif isinstance(message, MessageSegment):
+            if message.is_text():
+                parts = [{"text": message.data.get("text", "")}]
+            else:
+                parts = [{"type": message.type, "data": message.data}]
+        else:
+            parts = [{"text": str(message)}]
+
+        final_payload = {}
+        for part in parts:
+            final_payload.update(part)
+            final_payload.update(kwargs)
+        try:
+            logger.info(f"[{self.self_id}] Sending message: {final_payload}")
+            return await self.adapter._call_api(self, "send", **final_payload)
+        except Exception as e:
+            logger.error(
+                f"[{self.self_id}] Failed to send message over WebSocket: {e}")
+
+    async def show(self,image:bytes|pathlib.Path,name:str):
+        if isinstance(image,bytes):
+            image_bytes = base64.b64encode(image).decode("utf-8")
+            return await self.adapter._call_api(self,"show",bytestring=image_bytes,name=name)
+        if isinstance(image,pathlib.Path):
+            return await self.adapter._call_api(self,"show",path=image.as_posix(),name=name)
+        else:
+            raise TypeError("image must be bytes or pathlib.Path")
+

@@ -4,10 +4,14 @@ from nonebot.compat import model_dump
 from nonebot.adapters import Event as BaseEvent
 from nonebot.utils import escape_tag
 
+from .message import Message, MessageSegment
+
+from nonebot import logger
+
 class Event(BaseEvent):
-    event_type : str
-    event_name : str
-    data : dict
+    event_type: str = "event"
+    event_name: str = "BaseEvent"
+    data: dict
 
     @override
     def get_event_name(self) -> str:
@@ -38,4 +42,24 @@ class Event(BaseEvent):
     def is_tome(self) -> bool:
         # 判断事件是否和机器人有关
         return False
+
+    @override
+    def get_type(self) -> str:
+        return self.event_type
+
+
+class MessageEvent(Event):
+    event_type: str = "message"
+    event_name: str = "MessageEvent"
+    data: dict
+
+    @override
+    def get_message(self):
+        return Message(self.data)
     
+    def get_data(self):
+        return self.data
+
+event_models = {"event": Event,
+                "message": MessageEvent
+                }
