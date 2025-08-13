@@ -6,6 +6,7 @@ dist/
 wheels/
 *.egg-info
 .vscode
+renpy/src/plugins
 
 # Virtual environments
 .venv
